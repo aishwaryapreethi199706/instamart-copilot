@@ -342,6 +342,11 @@ def main():
         y_test
     )
 
+    # Confirm that no feature column has a missing value.
+    missing_total = int(X.isna().sum().sum())
+    print("\nMISSING VALUE CHECK")
+    print("Missing values in feature columns:", missing_total)
+    assert missing_total == 0
     # Compare scaler training mean with full-cohort frequency mean.
     scaler = (
         logistic_grid.best_estimator_
