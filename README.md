@@ -244,9 +244,15 @@ The zero-shot confusion matrix, using the order billing, delivery, technical, fr
  [11,  0,  0, 23]]
 ```
 
+**When few-shot is worth the tokens.** The zero-shot prompt used 60.76 tokens per classified ticket and reached 85.71% accuracy (126 of 147). The few-shot prompt used 138.23 tokens per ticket, about 77 tokens more, and reached 100%. Every zero-shot error was a fraud ticket predicted as billing (11) or a technical ticket predicted as billing (10), and a missed fraud ticket is the costly mistake, because fraud must reach the security team quickly. So few-shot is worth the extra tokens when a wrong category has a real cost, and zero-shot is enough when tickets are simple and the budget is tight.
+
+**Which outputs were rule-validated and which went to humans.** In the final few-shot run, 147 tickets passed the output rules and were routed automatically: 135 with valid JSON and 12 recovered by the keyword rule. 17 tickets went to human review: 9 had invalid model output (for example a category outside the allowed list), 4 were empty and 4 were too long, so none of these 8 were sent to the model. No ticket ended with a permanent error, and none was guessed.
+
 ### Budget and routing
 
 The zero-shot budget demonstration used a token budget of 6,000. Processing stopped after 99 tickets when token usage reached 6,023, slightly exceeding the budget because the budget was checked before each classification.
+
+**Budget demo result (TOKEN_BUDGET = 6000, zero-shot, saved to `outputs/triage_budget_demo.csv`).** Of the 156 eligible tickets, 99 were classified, 6 had invalid output, and 51 ended as `budget_exhausted`, so the budget did stop the run. Those 51 tickets went to human review without any model call. The final `outputs/triage_results.csv` used a separate few-shot run with TOKEN_BUDGET = 100000, so no ticket was exhausted there.
 
 Final triage output contained 164 rows:
 
@@ -256,6 +262,8 @@ Final triage output contained 164 rows:
 | security_team | 34 |
 | human_review | 17 |
 | premium_desk | 11 |
+
+**Routing rules.** Tickets with status skipped_empty, flagged_long, flagged_invalid_output or budget_exhausted go to human_review with priority NORMAL. Otherwise, a fraud ticket goes to security_team with priority HIGH. Otherwise, a ticket from a Premium customer goes to premium_desk with priority HIGH. All other tickets go to support_queue with priority NORMAL. A customer with no row in the segment file is treated as not Premium. This gives 45 HIGH tickets (34 fraud and 11 premium) and 119 NORMAL tickets.
 
 The output includes ticket ID, customer ID, status, category, segment name, priority, route, and tokens used.
 
