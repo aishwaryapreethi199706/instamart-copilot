@@ -101,6 +101,23 @@ Completed orders generated revenue of **INR 2,998,668.80**.
 
 The correlation between discount percentage and order amount was approximately -0.095. The correlation between quantity and order amount was approximately 0.087. These are weak associations and do not establish causation.
 
+### SQL results to note
+
+**Q2 largest cell.** The largest revenue cell is Bengaluru / Electronics at INR 233,909.45.
+
+**Q6 top customer per city (by completed spend).**
+
+| City | Customer | Total spend (INR) |
+|---|---|---:|
+| Bengaluru | C0082 | 12,856.20 |
+| Chennai | C0930 | 10,151.40 |
+| Delhi | C0291 | 13,742.60 |
+| Hyderabad | C0743 | 12,730.05 |
+| Mumbai | C0693 | 14,766.55 |
+| Pune | C0426 | 10,377.10 |
+
+Ties make RANK() differ from ROW_NUMBER() because two customers in a city with exactly the same spend share one RANK, while ROW_NUMBER() still gives them different numbers (1, 2), so the two columns differ after the tie.
+
 ## Part B - Customer Segmentation and Lapse Prediction
 
 ### RFM segmentation
