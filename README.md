@@ -191,6 +191,46 @@ The following data types and missing-value counts were obtained using Pandas `re
 | Distinct non-blank gender spellings | 10 |
 | Blank genders | 30 |
 
+**Cleaning operations and record counts**
+
+Customer cleaning:
+
+| Operation | Result |
+|---|---:|
+| Raw customer records | 1,200 |
+| Blank ages | 61 |
+| Ages outside the accepted 10–100 range | 6 |
+| Ages missing before median imputation | 67 |
+| Ages filled using city-level median | 67 |
+| Missing ages after cleaning | 0 |
+| Blank gender values normalized to `unknown` | 30 |
+| Cleaned gender categories | female: 610; male: 560; unknown: 30 |
+| Distinct raw city spellings | 24 |
+| Cleaned city categories | 6 |
+| Cleaned age range | 18–60 |
+
+City names were stripped of surrounding whitespace and converted to title case. Gender values were stripped, converted to lowercase and mapped to `female`, `male` or `unknown`. Invalid ages outside 10–100 were treated as missing. Missing ages were imputed using the median age within each city. Signup dates were converted to datetime values.
+
+Order cleaning:
+
+| Operation | Result |
+|---|---:|
+| Raw order records | 13,084 |
+| Exact duplicate rows removed | 119 |
+| Rows after exact duplicate removal | 12,965 |
+| Rows after retaining the latest record per order ID | 12,309 |
+| Additional rows removed by order-ID deduplication | 656 |
+| Missing or invalid order amounts filled using product price, quantity and discount | 112 |
+| Negative delivery times converted to missing values | 105 |
+| Missing completed-order delivery times filled using category-level medians | 774 |
+| Missing cancelled-order delivery times retained | 1,199 |
+| Missing order amounts after cleaning | 0 |
+| Missing completed-order delivery times after cleaning | 0 |
+
+Order timestamps were converted to datetime values, and statuses were standardized to lowercase. Numeric columns were converted to numeric types. Product category and price were joined using `product_id`, with a many-to-one validation. Missing order amounts were calculated as product price × quantity × (1 − discount percentage / 100). Negative delivery times were treated as missing. Missing delivery times were imputed using category-level medians for completed orders; missing delivery times for cancelled orders were retained.
+
+The final cleaned orders dataset contains 12,309 records: 11,110 completed and 1,199 cancelled. Completed-order revenue is INR 2,998,668.80.
+
 **Cleaned customer distributions**
 
 | City | Customers |
