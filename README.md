@@ -269,113 +269,97 @@ The output includes ticket ID, customer ID, status, category, segment name, prio
 
 ## Part D - Policy RAG and ReAct Agent
 
-### Policy retrieval
+### Chunking
 
-The policy documents are split into 40-word chunks with an overlap of 10 words. TF-IDF vectorization and cosine similarity are used to retrieve the top three relevant passages.
+The five policy files are split into chunks of 40 words with an overlap of 10 words. The first chunk covers words 0 to 39 and the next starts 30 words later. The source file name is stored with every chunk.
 
 | Policy document | Chunks |
 |---|---:|
+| refund_policy.txt | 4 |
 | delivery_policy.txt | 3 |
 | escalation_policy.txt | 3 |
 | payment_policy.txt | 3 |
 | privacy_policy.txt | 2 |
-| refund_policy.txt | 4 |
 | **Total** | **15** |
 
-Evaluation results:
+### Retrieval (TF-IDF)
 
-- Expected document found: 12/12 answerable questions.
-- Expected fact found: 12/12 answerable questions.
-- Correct fallback responses: 2/2 unanswerable questions.
+`TfidfVectorizer()` is fitted on the chunk texts. A query is transformed with the same fitted vectorizer, and the chunks are ranked by cosine similarity. `retrieve(query, k=3)` returns a list of dictionaries with `source`, `score` and `text`.
 
-The zero-overlap comparison produced 11/12 expected facts. The question about the time taken to return money after a failed but deducted payment lost its expected fact in the retrieved passages. This illustrates how chunk overlap can help preserve information around chunk boundaries.
+TF (term frequency) measures how often a word appears in a chunk. IDF (inverse document frequency) measures how rare a word is across all chunks, so rare words count for more and common words count for less. A limitation of TF-IDF is that it matches words, not meaning: two questions with the same meaning but different wording can retrieve different chunks.
 
-### ReAct agent
+### Answering with retrieved context
 
-The agent uses five tools:
+`answer(question)` retrieves the top three chunks and sends two messages to `mock_llm.chat`. The system message contains the words POLICY ASSISTANT and tells the model to answer only from the context, or to say it could not find the information. The user message has the form CONTEXT, then the three chunks each prefixed with `[source file name]`, then QUESTION, then the question. The function returns the answer text and the sources used.
 
-1. `get_order`
-2. `search_policy`
-3. `calculate_refund`
-4. `issue_refund`
-5. `escalate_to_human`
+### Retrieval and grounding evaluation
 
-The agent uses a maximum of six iterations and supports token and time limits.
+The file `data/raw/policy_eval.csv` has 14 questions: 12 answerable and 2 not covered by any document.
 
-Seven supplied scenarios were executed:
+| Setting | Chunks | Expected document in top 3 (of 12) | Answer contains expected fact (of 12) | Fallback "I could not find" (of 2) |
+|---|---:|---:|---:|---:|
+| 40 words, overlap 10 | 15 | 12 | 12 | 2 |
+| 40 words, overlap 0 | 13 | 12 | 11 | 2 |
 
-| Scenario | Actual outcome |
+With overlap 0, one question breaks: "How soon is money returned when a payment fails but is deducted?" (expected fact: 48 hours, in payment_policy.txt). The sentence holding the fact is cut across a chunk boundary, so the retrieved chunks do not contain the full fact. The 10-word overlap keeps those words together in one chunk. Results are saved in `outputs/policy_rag_evaluation.csv` and `outputs/policy_rag_zero_overlap.csv`.
+
+### Tools
+
+The agent has five tools, kept in `TOOLS_SPEC` (name, one-sentence description, parameters) and in the dictionary `TOOL_MAP`, which maps a tool name to a Python function.
+
+| Tool | What it does |
 |---|---|
-| S1 | REFUND - INR 128.25 |
-| S2 | REFUND - INR 135.00 |
-| S3 | ESCALATE - INR 1,999.00 |
-| S4 | DENIED |
-| S5 | DENIED |
-| S6 | NOT_FOUND |
-| S7 | FALLBACK_MAX_ITERATIONS |
+| get_order(order_id) | Reads the order from `data/instamart.db` and returns its status, amount and delivery minutes, or an "order not found" error. |
+| search_policy(query) | Returns the retrieval results for the query. |
+| calculate_refund(order_amount, delivery_minutes) | Returns the full order amount if delivery took more than 45 minutes, otherwise 0. |
+| issue_refund(order_id, refund_inr) | Appends one line to `outputs/refund_ledger.jsonl` and returns the refund amount. |
+| escalate_to_human(order_id, refund_inr) | Appends one line to the ledger for a refund above INR 1000 and returns the amount. |
 
-S7's expected CSV label is `FALLBACK`; the agent reports the more specific `FALLBACK_MAX_ITERATIONS`.
+Refund rules: only completed orders can be refunded; delivery in more than 45 minutes gives a 100% refund; delivery in 45 minutes or less gives 0; a refund above INR 1000 is escalated to a human and not issued automatically. All simulated requests are treated as raised inside the 7-day window.
 
-### Reliability and recovery
+### ReAct loop
 
-- LLM calls and token usage by scenario: S1: 5 calls/1,229 tokens; S2: 5/1,229; S3: 5/1,228; S4: 4/875; S5: 3/539; S6: 2/206; S7: 6/3,327.
-- A simulated crash after the second tool execution was recovered from a saved checkpoint.
-- The resumed run executed the remaining tools without repeating the first two. The complete tool sequence was `get_order`, `search_policy`, `calculate_refund`, and `issue_refund`.
-- Token-limit test: `FALLBACK_TOKEN_LIMIT` after 2 calls and 242 tokens; only `get_order` executed.
-- Timeout test: `FALLBACK_TIMEOUT` after 0 calls and 0 tokens; no tools executed.
-- Maximum-iteration test: `FALLBACK_MAX_ITERATIONS` after 6 calls and 3,327 tokens.
+`run_agent(user_message, scenario_id, max_iterations=6, token_limit=6000, time_limit_seconds=10)` starts with a system message containing the word AGENT and the user message. In each iteration the model is called. If the reply has no tool call, its text is the final answer. Otherwise the tool is looked up in `TOOL_MAP` and executed, and its result is added to the messages as a tool message. The function returns `status`, `final_answer`, `steps`, `llm_calls` and `tokens_used`. Every run is appended to `outputs/agent_runs.jsonl`.
 
-The simulated refund actions are recorded in `outputs/refund_ledger.jsonl`, while scenario execution results are recorded in `outputs/agent_runs.jsonl`.
+### Seven scenario results
 
-**Operational limitation:** All supplied simulated refund requests are treated as being within the policy's seven-day request window. The demonstration ledger records simulated refund actions; it does not connect to a real payment system.
+| Scenario | Status | Refund amount (INR) | Model calls | Tokens used |
+|---|---|---:|---:|---:|
+| S1 | REFUND | 128.25 | 5 | 1,229 |
+| S2 | REFUND | 135.00 | 5 | 1,229 |
+| S3 | ESCALATE | 1,999.00 (sent to a human lead, not issued) | 5 | 1,228 |
+| S4 | DENIED | 0.00 | 4 | 875 |
+| S5 | DENIED | 0.00 | 3 | 539 |
+| S6 | NOT_FOUND | 0.00 | 2 | 206 |
+| S7 | FALLBACK_MAX_ITERATIONS | 0.00 | 6 | 3,327 |
 
-## Limitations and Next Steps
+S7 uses a looping request, so it never reaches a final answer and stops after six model calls with the status the brief requires. With the default token limit of 6000 it was not stopped early.
 
-- The project uses deterministic offline LLM simulation rather than a production language model.
-- The synthetic dataset may not represent real-world customer behavior.
-- Model performance should be evaluated on additional unseen data before production use.
-- Customer segmentation and lapse prediction require periodic monitoring and retraining.
-- The refund request date should be collected and validated before processing real refunds.
-- Refund issuance and human escalation should be integrated with authenticated production systems before deployment.
-- Further work could include a dashboard, monitoring, model drift detection, and a production-grade database.
-- The Premium flag is a post-hoc whole-window label, because it uses RFM from the full window including September. The retention list is therefore illustrative and not a leakage-free evaluation.
+### Stop-safely demonstrations
 
-## Project Structure
+| Demonstration | Status | Result |
+|---|---|---|
+| Maximum iterations (S7) | FALLBACK_MAX_ITERATIONS | Stopped after 6 model calls and 3,327 tokens. |
+| S1 with token_limit=200 | FALLBACK_TOKEN_LIMIT | Stopped after 2 model calls and 242 tokens; only get_order was executed. |
+| S1 with time_limit_seconds=0 | FALLBACK_TIMEOUT | Stopped before the first model call (0 calls, 0 tokens, no tools executed). |
 
-```text
-instamart-copilot/
-+-- generate_data.py
-+-- mock_llm.py
-+-- requirements.txt
-+-- README.md
-+-- .gitignore
-+-- data/
-|   +-- raw/        (generated by generate_data.py)
-|   +-- clean/      (customers.csv, products.csv, orders.csv)
-|   +-- policies/   (five policy text files)
-|   +-- instamart.db
-+-- sql/
-|   +-- queries.sql
-+-- src/
-|   +-- audit_tables.py
-|   +-- clean_data.py
-|   +-- validate_data.py
-|   +-- load_database.py
-|   +-- run_queries.py
-|   +-- pandas_analysis.py
-|   +-- customer_segments.py
-|   +-- lapse_prediction.py
-|   +-- ticket_triage.py
-|   +-- policy_rag.py
-|   +-- agent.py
-+-- outputs/        (segments, model, triage and agent outputs)
-+-- state/          (agent checkpoints)
-```
+Each fallback returns the steps completed so far and a short hand-off message for a human agent.
 
-### ReAct vs Plan-Execute
+### Crash and resume (S1)
 
-The ReAct approach was selected because the support agent must make decisions based on information discovered during execution. It alternates between reasoning, tool calls, and observations. For example, it can look up an order, retrieve the relevant policy, calculate a refund, and then decide whether to issue the refund or escalate the case.
+After every tool observation the agent saves a checkpoint file in `state/` with the run id, scenario id, full message list, tokens used, step number and the tools already executed. A simulated crash was raised right after the second tool execution, and then `resume_agent(run_id)` loaded the checkpoint and continued. Tools executed across the crash and the resume, in order:
 
-In the seven measured scenarios, the agent used 2–6 model calls and 206–3,327 tokens per run. Checkpoint recovery resumed after a simulated crash without repeating the first two tool executions. Token, timeout, and maximum-iteration fallbacks were also tested.
+1. get_order
+2. search_policy
+3. calculate_refund
+4. issue_refund
 
-A Plan-Execute approach would create a sequence of actions in advance and then execute it. This can be more predictable for fixed workflows, while ReAct is more flexible when an order is missing, a refund is ineligible, or escalation is required. A separate Plan-Execute baseline was not implemented, so these results do not establish an empirical performance advantage. ReAct also requires iteration limits, token limits, timeout handling, and checkpoint recovery to control execution safely.
+Each tool ran exactly once, and the final status was REFUND with INR 128.25.
+
+### ReAct versus plan-and-execute
+
+ReAct called the model 5 times for S1, 3 for S5 and 2 for S6, using 1,229, 539 and 206 tokens. Each call sends the growing message list again, so tokens rise with every step. A plan-and-execute design asks the model for the whole step list once, so it would use fewer model calls and fewer tokens on a normal refund like S1 (about 1 or 2 calls instead of 5). I did not build it, so this is an estimate, not a measurement.
+
+The difference shows up when something unexpected happens. In S6 the order is not found, and ReAct stops after 2 calls with NOT_FOUND. A fixed plan would still list the later steps (policy search, refund calculation), so it would need a replan or an error check. The same applies to a cancelled order (S5): ReAct reads the status and denies the request after 3 calls.
+
+I chose ReAct for this refund workflow. It needs few steps, so the extra tokens are small, and each decision depends on the last result: order status, delivery time, and whether the amount is above INR 1000. Checking after each step also makes it easier to stop safely and to resume after a crash.
