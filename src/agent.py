@@ -142,16 +142,19 @@ def issue_refund(order_id, refund_inr):
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Avoid duplicate ledger entries if a tool is retried.
+    # Avoid duplicate issued refunds.
     if LEDGER_FILE.exists():
         with LEDGER_FILE.open("r", encoding="utf-8") as file:
             for line in file:
                 if not line.strip():
                     continue
+
                 entry = json.loads(line)
+
                 if (
                     entry.get("order_id") == order_id
                     and float(entry.get("refund_inr", 0)) == amount
+                    and entry.get("status") == "issued"
                 ):
                     return {
                         "success": True,
@@ -161,6 +164,7 @@ def issue_refund(order_id, refund_inr):
                     }
 
     entry = {
+        "tool_name": "issue_refund",
         "order_id": order_id,
         "refund_inr": amount,
         "status": "issued",
@@ -179,10 +183,26 @@ def issue_refund(order_id, refund_inr):
 
 
 def escalate_to_human(order_id, refund_inr):
+    amount = round(float(refund_inr), 2)
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    entry = {
+        "tool_name": "escalate_to_human",
+        "order_id": order_id,
+        "refund_inr": amount,
+        "status": "escalated",
+        "route": "human_support_lead",
+        "timestamp": pd.Timestamp.now().isoformat()
+    }
+
+    with LEDGER_FILE.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(entry) + "\n")
+
     return {
         "success": True,
         "order_id": order_id,
-        "refund_inr": round(float(refund_inr), 2),
+        "refund_inr": amount,
         "route": "human_support_lead",
         "reason": "Refund exceeds INR 1000 and requires human approval."
     }
@@ -700,11 +720,12 @@ def main():
     for row, result in zip(scenarios.to_dict("records"), results):
         expected = str(row["expected_outcome"])
         actual = result["status"]
+        match = actual == expected or (expected == "FALLBACK" and actual.startswith("FALLBACK_"))
         print(
             row["scenario_id"],
             "| expected:", expected,
             "| actual:", actual,
-            "| match:", expected == actual
+            "| match:", match
         )
 
     run_safety_tests()

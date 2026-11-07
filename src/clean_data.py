@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import pandas as pd
 
@@ -88,6 +87,8 @@ def clean_customers():
         ~customers["age"].between(10, 100), "age"
     ] = pd.NA
 
+    print("\nAges missing before fill:", customers["age"].isna().sum())
+
     customers["age"] = customers["age"].fillna(
         customers.groupby("city")["age"].transform("median")
     )
@@ -113,6 +114,8 @@ def clean_customers():
 def clean_orders():
     orders = pd.read_csv(RAW / "orders.csv")
     products = pd.read_csv(RAW / "products.csv")
+    print("\nORDER CLEANING STEPS")
+    print("Step 1 raw rows:", len(orders))
 
     # Convert order timestamp
     orders["order_ts"] = pd.to_datetime(
@@ -121,12 +124,14 @@ def clean_orders():
 
     # Remove exact duplicate rows
     orders = orders.drop_duplicates()
+    print("Step 2 after removing exact duplicates:", len(orders))
 
     # Keep latest record for each order ID
     orders = orders.sort_values("order_ts")
     orders = orders.drop_duplicates(
         subset="order_id", keep="last"
     ).copy()
+    print("Step 3 after keeping latest record per order_id:", len(orders))
 
     # Standardize status
     orders["status"] = orders["status"].str.strip().str.lower()
@@ -160,11 +165,13 @@ def clean_orders():
         * (1 - orders["discount_pct"] / 100)
     ).round(2)
 
+    print("Step 4 amounts filled from product price:", orders["order_amount"].isna().sum())
     orders["order_amount"] = orders["order_amount"].fillna(
         calculated_amount
     )
 
     # Replace negative delivery times with missing values
+    print("Step 5 negative delivery times set to missing:", (orders["delivery_minutes"] < 0).sum())
     orders.loc[
         orders["delivery_minutes"] < 0,
         "delivery_minutes"
@@ -172,6 +179,7 @@ def clean_orders():
 
     # Fill missing delivery times for completed orders
     completed = orders["status"].eq("completed")
+    print("Step 6 completed delivery times filled:", orders.loc[completed, "delivery_minutes"].isna().sum())
 
     completed_category_medians = (
         orders.loc[completed]
