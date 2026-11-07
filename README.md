@@ -127,6 +127,47 @@ The raw datasets were inspected before cleaning. The audit reported:
 | Customers | 1,200 × 5 | age: 61 (5.08%); gender: 30 (2.50%) |
 | Products | 40 × 4 | None |
 | Orders | 13,084 × 9 | order_amount: 53 (0.41%); delivery_minutes: 2,541 (19.42%) |
+| Agent scenarios | 7 × 5 | None |
+| Policy evaluation | 14 × 3 | expected_fact: 2 (14.29%) |
+| Tickets | 164 × 5 | order_id: 8 (4.88%); text: 4 (2.44%) |
+
+**Column-level raw-data audit**
+
+The following data types and missing-value counts were obtained using Pandas `read_csv()` before cleaning. Missing percentages are calculated against the total rows in each file.
+
+| Dataset | Column | Data type | Missing | Missing % |
+|---|---|---|---:|---:|
+| Customers | customer_id | str | 0 | 0.00% |
+| Customers | city | str | 0 | 0.00% |
+| Customers | signup_date | str | 0 | 0.00% |
+| Customers | age | float64 | 61 | 5.08% |
+| Customers | gender | str | 30 | 2.50% |
+| Products | product_id | str | 0 | 0.00% |
+| Products | product_name | str | 0 | 0.00% |
+| Products | category | str | 0 | 0.00% |
+| Products | price_inr | int64 | 0 | 0.00% |
+| Orders | order_id | str | 0 | 0.00% |
+| Orders | customer_id | str | 0 | 0.00% |
+| Orders | product_id | str | 0 | 0.00% |
+| Orders | quantity | int64 | 0 | 0.00% |
+| Orders | order_ts | str | 0 | 0.00% |
+| Orders | status | str | 0 | 0.00% |
+| Orders | discount_pct | int64 | 0 | 0.00% |
+| Orders | order_amount | str | 53 | 0.41% |
+| Orders | delivery_minutes | float64 | 2,541 | 19.42% |
+| Agent scenarios | scenario_id | str | 0 | 0.00% |
+| Agent scenarios | customer_id | str | 0 | 0.00% |
+| Agent scenarios | message | str | 0 | 0.00% |
+| Agent scenarios | expected_outcome | str | 0 | 0.00% |
+| Agent scenarios | expected_refund_inr | float64 | 0 | 0.00% |
+| Policy evaluation | question | str | 0 | 0.00% |
+| Policy evaluation | expected_doc | str | 0 | 0.00% |
+| Policy evaluation | expected_fact | str | 2 | 14.29% |
+| Tickets | ticket_id | str | 0 | 0.00% |
+| Tickets | customer_id | str | 0 | 0.00% |
+| Tickets | order_id | str | 8 | 4.88% |
+| Tickets | text | str | 4 | 2.44% |
+| Tickets | true_category | str | 0 | 0.00% |
 
 **Raw order quality checks**
 
