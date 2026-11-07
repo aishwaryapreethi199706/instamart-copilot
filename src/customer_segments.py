@@ -52,7 +52,7 @@ def build_rfm():
             "K": k,
             "inertia": round(model.inertia_, 2),
             "silhouette": round(
-                silhouette_score(scaled_rfm, labels), 3
+                silhouette_score(scaled_rfm, labels, working_memory=32), 3
             )
         })
 

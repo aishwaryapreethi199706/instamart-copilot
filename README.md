@@ -1,4 +1,4 @@
-﻿# Instamart Customer Intelligence & Support Copilot
+# Instamart Customer Intelligence & Support Copilot
 
 ## Overview
 
@@ -118,6 +118,99 @@ The correlation between discount percentage and order amount was approximately -
 
 Ties make RANK() differ from ROW_NUMBER() because two customers in a city with exactly the same spend share one RANK, while ROW_NUMBER() still gives them different numbers (1, 2), so the two columns differ after the tie.
 
+### Raw-data audit
+
+The raw datasets were inspected before cleaning. The audit reported:
+
+| Dataset | Shape | Columns with missing values |
+|---|---:|---|
+| Customers | 1,200 × 5 | age: 61 (5.08%); gender: 30 (2.50%) |
+| Products | 40 × 4 | None |
+| Orders | 13,084 × 9 | order_amount: 53 (0.41%); delivery_minutes: 2,541 (19.42%) |
+
+**Raw order quality checks**
+
+| Check | Result |
+|---|---:|
+| Raw order rows | 13,084 |
+| Exact duplicate rows | 119 |
+| Pending rows | 656 |
+| Distinct order IDs | 12,309 |
+| Non-numeric order amounts (including missing values) | 120 |
+| Negative delivery times | 106 |
+| Blank delivery times | 2,541 |
+
+**Raw customer quality checks**
+
+| Check | Result |
+|---|---:|
+| Blank ages | 61 |
+| Ages outside 10–100 | 6 |
+| Distinct raw city spellings | 24 |
+| Distinct non-blank gender spellings | 10 |
+| Blank genders | 30 |
+
+**Cleaned customer distributions**
+
+| City | Customers |
+|---|---:|
+| Pune | 227 |
+| Delhi | 210 |
+| Bengaluru | 197 |
+| Chennai | 191 |
+| Hyderabad | 191 |
+| Mumbai | 184 |
+
+| Gender | Customers |
+|---|---:|
+| Female | 610 |
+| Male | 560 |
+| Unknown | 30 |
+
+Invalid ages were treated as missing and filled using the median age within each city. The cleaned dataset has no missing ages, with an age range of 18–60.
+
+
+### SQL query results summary
+
+| Query | Result |
+|---|---|
+| Q1 | 30 customers met the completed-spend criteria. |
+| Q2 | 30 city/category combinations; total revenue INR 2,998,668.80. |
+| Q3 | 11 products priced above the average catalogue price. |
+| Q4 | 25 customers had no completed order. |
+| Q5 | 550 customers spent above the average customer spend of INR 2,552.06. |
+| Q6 | 1,175 customers ranked by completed spend within their city; RANK differed from ROW_NUMBER in 8 rows. |
+| Q7 | 183 daily revenue rows; final cumulative revenue INR 2,998,668.80. |
+
+
+### Pandas cross-check and distribution statistics
+
+The Pandas pivot-table grand total matches the SQL revenue total: INR 2,998,668.80.
+
+**City-level completed-order summary**
+
+| City | Total revenue (INR) | Mean order value (INR) | Orders |
+|---|---:|---:|---:|
+| Bengaluru | 523,643.40 | 276.47 | 1,894 |
+| Chennai | 463,629.15 | 272.72 | 1,700 |
+| Delhi | 502,829.80 | 243.62 | 2,064 |
+| Hyderabad | 528,589.90 | 284.95 | 1,855 |
+| Mumbai | 479,058.50 | 297.00 | 1,613 |
+| Pune | 500,918.05 | 252.48 | 1,984 |
+
+**Completed order-value distribution**
+
+| Statistic | Value (INR) |
+|---|---:|
+| First quartile (Q1) | 64.80 |
+| Third quartile (Q3) | 297.00 |
+| Lower outlier fence | -283.50 |
+| Upper outlier fence | 645.30 |
+| Lower outliers | 0 |
+| Upper outliers | 897 |
+
+The distribution is strongly right-skewed. The outlier count is based on the 1.5 × IQR rule; these high-value orders are retained rather than automatically removed.
+
 ## Part B - Customer Segmentation and Lapse Prediction
 
 ### RFM segmentation
@@ -180,7 +273,7 @@ The dataset was split into 924 training rows and 232 test rows.
 | Random Forest | 0.7371 | 0.6554 |
 | Oversampled Logistic Regression | 0.7155 | 0.6972 |
 
-**Model choice.** Random Forest was selected. It had the higher cross-validated F1 (0.6811 vs 0.6506) and a slightly higher test F1 on the lapsed class (0.6554 vs 0.6480), with 58 of the 89 truly lapsing customers caught by both models. Missing a lapsing customer means a lost customer with no retention offer, which costs far more than a wasted discount sent to a loyal customer who would have stayed. Because recall matters more than precision here, F1 on the lapsed class is a better guide than accuracy. The Random Forest also made fewer false alarms (30 vs 32 loyal customers wrongly flagged), so it was the better choice on both counts.
+**Model choice.** Random Forest was selected. It had the higher cross-validated F1 (0.6811 vs 0.6506) and a slightly higher test F1 on the lapsed class (0.6554 vs 0.6480), Missing a lapsing customer means a lost customer with no retention offer, which costs far more than a wasted discount sent to a loyal customer who would have stayed. Because recall matters more than precision here, F1 on the lapsed class is a better guide than accuracy. The Random Forest also made fewer false alarms (30 vs 32 loyal customers wrongly flagged), so it was the better choice on both counts.
 
 **Top 5 Random Forest features (importance) and business reading**
 
@@ -207,6 +300,58 @@ The selected model was saved and reloaded successfully, and its predictions matc
 **Retention list.** Among the test-set customers in the Premium segment, the 10 with the highest predicted lapse probability were saved to `outputs/retention_list.csv`. Of these 10 customers, 1 truly lapsed (C0525). The Premium flag comes from the whole-window RFM, which includes September, the month that defines the lapse label, so this retention list is illustrative and not a leakage-free evaluation.
 
 **Evaluation limitation:** The Premium segment flag is based on the full-window RFM calculation, including the September period. It should therefore be treated as a descriptive customer segment rather than a strictly leakage-free predictive feature.
+
+### Additional K-means evaluation
+
+| K | Inertia | Silhouette |
+|---:|---:|---:|
+| 2 | 1820.76 | 0.465 |
+| 3 | 1268.23 | 0.445 |
+| 4 | 743.07 | 0.526 |
+| 5 | 617.37 | 0.480 |
+| 6 | 503.17 | 0.482 |
+| 7 | 408.46 | 0.416 |
+| 8 | 366.50 | 0.412 |
+
+The K=4 segment profiles were:
+
+| Segment | Customers | Mean recency | Mean frequency | Mean monetary (INR) |
+|---|---:|---:|---:|---:|
+| Regular | 436 | 28.86 | 3.77 | 1,057.62 |
+| Premium | 138 | 24.12 | 6.77 | 7,129.70 |
+| Loyal | 419 | 8.77 | 19.40 | 3,410.02 |
+| At-Risk | 182 | 109.04 | 2.20 | 685.99 |
+
+PCA component 1 explains 63.4% of variance and component 2 explains 21.8%, for 85.2% combined.
+
+### Lapse-model evaluation details
+
+The GridSearchCV results were:
+
+| Model | Best parameters | Best CV F1 |
+|---|---|---:|
+| Logistic Regression | `C=100` | 0.6506 |
+| Random Forest | `max_depth=8, min_samples_leaf=10` | 0.6811 |
+
+**Logistic Regression test confusion matrix**
+
+| | Predicted not lapsed | Predicted lapsed |
+|---|---:|---:|
+| Actual not lapsed | 111 | 32 |
+| Actual lapsed | 31 | 58 |
+
+Accuracy: 0.7284; precision: 0.6444; recall: 0.6517; lapsed-class F1: 0.6480.
+
+**Random Forest test confusion matrix**
+
+| | Predicted not lapsed | Predicted lapsed |
+|---|---:|---:|
+| Actual not lapsed | 113 | 30 |
+| Actual lapsed | 31 | 58 |
+
+Accuracy: 0.7371; precision: 0.6591; recall: 0.6517; lapsed-class F1: 0.6554.
+
+Both models had the same number of lapsed-customer false negatives (31). Random Forest had two fewer false positives (30 versus 32), which is consistent with its slightly better test F1 and accuracy.
 
 ## Part C - Support Ticket Triage
 
@@ -375,8 +520,29 @@ Each tool ran exactly once, and the final status was REFUND with INR 128.25.
 
 ### ReAct versus plan-and-execute
 
-ReAct called the model 5 times for S1, 3 for S5 and 2 for S6, using 1,229, 539 and 206 tokens. Each call sends the growing message list again, so tokens rise with every step. A plan-and-execute design asks the model for the whole step list once, so it would use fewer model calls and fewer tokens on a normal refund like S1 (about 1 or 2 calls instead of 5). I did not build it, so this is an estimate, not a measurement.
+ReAct called the model 5 times for S1, 3 for S5 and 2 for S6, using 1,229, 539 and 206 tokens respectively. Each call sends the growing message list again, so cumulative token usage increases with each step.
 
-The difference shows up when something unexpected happens. In S6 the order is not found, and ReAct stops after 2 calls with NOT_FOUND. A fixed plan would still list the later steps (policy search, refund calculation), so it would need a replan or an error check. The same applies to a cancelled order (S5): ReAct reads the status and denies the request after 3 calls.
+A plan-and-execute approach would generate a sequence of actions in advance and then execute it. This could reduce model calls for predictable workflows such as S1, but the actual token and call savings were not measured because a separate Plan-Execute baseline was not implemented.
 
-I chose ReAct for this refund workflow. It needs few steps, so the extra tokens are small, and each decision depends on the last result: order status, delivery time, and whether the amount is above INR 1000. Checking after each step also makes it easier to stop safely and to resume after a crash.
+ReAct adapts its next action to each tool result. In S6, the order is not found, so the agent stops after 2 calls with NOT_FOUND. In S5, it reads the cancelled status and denies the request after 3 calls. A fixed plan would need explicit checks or replanning to handle such results safely.
+
+I chose ReAct because each refund decision depends on the previous result: order status, delivery time, and whether the refund exceeds INR 1,000. Iterative checks also support safe stopping and checkpoint-based recovery. These results demonstrate the behaviour of the implemented ReAct agent, not an empirical performance advantage over Plan-Execute.
+## Limitations and Next Steps
+
+### Limitations
+
+- The project uses synthetic data, so its customer patterns and model results may not represent real Instamart customers.
+- Lapse prediction is evaluated on one time-based cohort and test split. Performance should be revalidated on newer, independent data before operational use.
+- The Premium retention list is illustrative: its segment flag uses the full-window RFM calculation, including the September label period. It is not a leakage-free predictive evaluation.
+- The supplied `mock_llm.py` provides an offline simulation. Classification, retrieval and agent results do not establish performance with a production language model.
+- TF-IDF retrieval matches lexical patterns rather than semantic meaning, so differently worded questions may retrieve less relevant policy chunks.
+- Refund, escalation, retry and routing behaviour is simulated and would need integration testing, monitoring and human oversight before deployment.
+
+### Next Steps
+
+- Validate the cleaning and modelling pipeline on representative, anonymised real-world data.
+- Repeat lapse evaluation across multiple chronological holdout periods and monitor precision, recall and calibration.
+- Build a leakage-free retention workflow using customer segments calculated strictly before the prediction date.
+- Evaluate semantic retrieval alongside TF-IDF using a broader set of policy questions.
+- Test the agent against additional edge cases and real operational workflows, with audit logs and human approval for sensitive actions.
+- If comparing ReAct with plan-and-execute, implement and evaluate both approaches under the same scenarios and token limits.
