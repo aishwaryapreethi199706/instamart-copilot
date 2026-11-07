@@ -312,3 +312,9 @@ instamart-copilot/
 ├── requirements.txt
 └── README.md
 ```
+
+### ReAct vs Plan-Execute
+
+The ReAct approach was selected because the support agent must make decisions based on information discovered during execution. It alternates between reasoning, tool calls, and observations, allowing it to look up an order, retrieve the relevant policy, calculate a refund, and then decide whether to issue the refund or escalate the case. This is useful when the next action depends on the result of the previous tool.
+
+A Plan-Execute approach would create a sequence of actions in advance and execute that plan. It can be more predictable for fixed workflows, but may be less flexible when an order is missing, a refund is not eligible, or a high-value refund requires escalation. ReAct is therefore more suitable for this interactive support workflow, although it requires iteration limits, token limits, timeout handling, and checkpoint recovery to control execution safely.
