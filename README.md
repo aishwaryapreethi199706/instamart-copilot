@@ -569,7 +569,7 @@ The zero-shot confusion matrix, using the order billing, delivery, technical, fr
 
 ### Budget and routing
 
-The zero-shot budget demonstration used a token budget of 6,000. Processing stopped after 99 tickets when token usage reached 6,023, slightly exceeding the budget because the budget was checked before each classification.
+The zero-shot budget demonstration used a token budget of 6,000. Processing stopped after 99 classification attempts when token usage reached 6,023, slightly exceeding the 6,000-token budget because the budget was checked before each classification. Of these attempts, 6 produced invalid output. The remaining 51 eligible tickets were not processed because the budget was exhausted.
 
 **Budget demo result (TOKEN_BUDGET = 6000, zero-shot, saved to `outputs/triage_budget_demo.csv`).** Of the 156 eligible tickets, 99 were classified, 6 had invalid output, and 51 ended as `budget_exhausted`, so the budget did stop the run. Those 51 tickets went to human review without any model call. The final `outputs/triage_results.csv` used a separate few-shot run with TOKEN_BUDGET = 100000, so no ticket was exhausted there.
 
