@@ -131,6 +131,7 @@ The raw datasets were inspected before cleaning. The audit reported:
 | Policy evaluation | 14 × 3 | expected_fact: 2 (14.29%) |
 | Tickets | 164 × 5 | order_id: 8 (4.88%); text: 4 (2.44%) |
 
+
 **Column-level raw-data audit**
 
 The following data types and missing-value counts were obtained using Pandas `read_csv()` before cleaning. Missing percentages are calculated against the total rows in each file.
@@ -169,6 +170,44 @@ The following data types and missing-value counts were obtained using Pandas `re
 | Tickets | text | str | 4 | 2.44% |
 | Tickets | true_category | str | 0 | 0.00% |
 
+
+**Column-level raw-data audit**
+
+The following data types and missing-value counts were obtained using Pandas `read_csv()` before cleaning. Missing percentages are calculated against the total rows in each file.
+
+| Dataset | Column | Data type | Missing | Missing % |
+|---|---|---|---:|---:|
+| Customers | customer_id | str | 0 | 0.00% |
+| Customers | city | str | 0 | 0.00% |
+| Customers | signup_date | str | 0 | 0.00% |
+| Customers | age | float64 | 61 | 5.08% |
+| Customers | gender | str | 30 | 2.50% |
+| Products | product_id | str | 0 | 0.00% |
+| Products | product_name | str | 0 | 0.00% |
+| Products | category | str | 0 | 0.00% |
+| Products | price_inr | int64 | 0 | 0.00% |
+| Orders | order_id | str | 0 | 0.00% |
+| Orders | customer_id | str | 0 | 0.00% |
+| Orders | product_id | str | 0 | 0.00% |
+| Orders | quantity | int64 | 0 | 0.00% |
+| Orders | order_ts | str | 0 | 0.00% |
+| Orders | status | str | 0 | 0.00% |
+| Orders | discount_pct | int64 | 0 | 0.00% |
+| Orders | order_amount | str | 53 | 0.41% |
+| Orders | delivery_minutes | float64 | 2,541 | 19.42% |
+| Agent scenarios | scenario_id | str | 0 | 0.00% |
+| Agent scenarios | customer_id | str | 0 | 0.00% |
+| Agent scenarios | message | str | 0 | 0.00% |
+| Agent scenarios | expected_outcome | str | 0 | 0.00% |
+| Agent scenarios | expected_refund_inr | float64 | 0 | 0.00% |
+| Policy evaluation | question | str | 0 | 0.00% |
+| Policy evaluation | expected_doc | str | 0 | 0.00% |
+| Policy evaluation | expected_fact | str | 2 | 14.29% |
+| Tickets | ticket_id | str | 0 | 0.00% |
+| Tickets | customer_id | str | 0 | 0.00% |
+| Tickets | order_id | str | 8 | 4.88% |
+| Tickets | text | str | 4 | 2.44% |
+| Tickets | true_category | str | 0 | 0.00% |
 **Raw order quality checks**
 
 | Check | Result |
@@ -248,8 +287,45 @@ The final cleaned orders dataset contains 12,309 records: 11,110 completed and 1
 | Male | 560 |
 | Unknown | 30 |
 
-Invalid ages were treated as missing and filled using the median age within each city. The cleaned dataset has no missing ages, with an age range of 18–60.
+**Cleaning operations and record counts**
 
+Customer cleaning:
+
+| Operation | Result |
+|---|---:|
+| Raw customer records | 1,200 |
+| Blank ages | 61 |
+| Ages outside the accepted 10–100 range | 6 |
+| Ages missing before median imputation | 67 |
+| Ages filled using city-level median | 67 |
+| Missing ages after cleaning | 0 |
+| Cleaned gender values categorized as `unknown` | 30 |
+| Cleaned gender categories | female: 610; male: 560; unknown: 30 |
+| Distinct raw city spellings | 24 |
+| Cleaned city categories | 6 |
+| Cleaned age range | 18–60 |
+
+City names were stripped of surrounding whitespace and converted to title case. Gender values were stripped, converted to lowercase and mapped to `female`, `male` or `unknown`. Invalid ages outside 10–100 were treated as missing. Missing ages were imputed using the median age within each city. Signup dates were converted to datetime values.
+
+Order cleaning:
+
+| Operation | Result |
+|---|---:|
+| Raw order records | 13,084 |
+| Exact duplicate rows removed | 119 |
+| Rows after exact duplicate removal | 12,965 |
+| Rows after retaining the latest record per order ID | 12,309 |
+| Additional rows removed by order-ID deduplication | 656 |
+| Missing or invalid order amounts filled using product price, quantity and discount | 112 |
+| Negative delivery times converted to missing values | 105 |
+| Missing completed-order delivery times filled using category-level medians | 774 |
+| Missing cancelled-order delivery times retained | 1,199 |
+| Missing order amounts after cleaning | 0 |
+| Missing completed-order delivery times after cleaning | 0 |
+
+Order timestamps were converted to datetime values, and statuses were standardized to lowercase. Numeric columns were converted to numeric types. Product category and price were joined using `product_id`, with a many-to-one validation. Missing order amounts were calculated as product price × quantity × (1 − discount percentage / 100). Negative delivery times were treated as missing. Missing delivery times were imputed using category-level medians for completed orders; missing delivery times for cancelled orders were retained.
+
+The final cleaned orders dataset contains 12,309 records: 11,110 completed and 1,199 cancelled. Completed-order revenue is INR 2,998,668.80.
 
 ### SQL query results summary
 
