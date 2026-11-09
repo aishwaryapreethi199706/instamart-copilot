@@ -9,11 +9,11 @@ from sklearn.decomposition import PCA
 ROOT = Path(__file__).resolve().parents[1]
 CLEAN = ROOT / "data" / "clean"
 OUTPUTS = ROOT / "outputs"
+OUTPUTS.mkdir(parents=True, exist_ok=True)
 
 
 def build_rfm():
     orders = pd.read_csv(CLEAN / "orders.csv")
-    customers = pd.read_csv(CLEAN / "customers.csv")
 
     orders = orders[orders["status"] == "completed"].copy()
     orders["order_ts"] = pd.to_datetime(orders["order_ts"])
@@ -26,18 +26,20 @@ def build_rfm():
         monetary=("order_amount", "sum")
     ).reset_index()
 
-    rfm["recency"] = (snapshot - rfm["last_order_ts"]).dt.days
+    rfm["recency"] = (
+        snapshot - rfm["last_order_ts"]
+    ).dt.days
 
     rfm = rfm[
         ["customer_id", "recency", "frequency", "monetary"]
     ]
 
-    # Standardize RFM features
+    # Standardize RFM features.
     features = ["recency", "frequency", "monetary"]
     scaler = StandardScaler()
     scaled_rfm = scaler.fit_transform(rfm[features])
 
-    # Evaluate K-means for K = 2 to 8
+    # Evaluate K-means for K = 2 to 8.
     results = []
 
     for k in range(2, 9):
@@ -52,17 +54,20 @@ def build_rfm():
             "K": k,
             "inertia": round(model.inertia_, 2),
             "silhouette": round(
-                silhouette_score(scaled_rfm, labels, working_memory=32), 3
+                silhouette_score(scaled_rfm, labels), 3
             )
         })
 
     metrics = pd.DataFrame(results)
-    metrics.to_csv(OUTPUTS / "kmeans_evaluation.csv", index=False)
+    metrics.to_csv(
+        OUTPUTS / "kmeans_evaluation.csv",
+        index=False
+    )
 
     print("\nK-MEANS EVALUATION")
     print(metrics.to_string(index=False))
 
-    # Final K=4 clustering
+    # Final K=4 clustering.
     final_model = KMeans(
         n_clusters=4,
         n_init=10,
@@ -70,7 +75,7 @@ def build_rfm():
     )
     rfm["segment_id"] = final_model.fit_predict(scaled_rfm)
 
-    # Profile the clusters
+    # Profile the clusters.
     profile = rfm.groupby("segment_id").agg(
         customers=("customer_id", "count"),
         mean_recency=("recency", "mean"),
@@ -81,18 +86,47 @@ def build_rfm():
     print("\nK=4 SEGMENT PROFILES")
     print(profile.to_string())
 
-    # Assign names based on the verified cluster profiles
+    # Identify Premium by highest mean monetary value.
+    premium_id = profile["mean_monetary"].idxmax()
+
+    remaining_ids = profile.index[
+        profile.index != premium_id
+    ]
+
+    # Identify At-Risk by highest mean recency.
+    at_risk_id = profile.loc[
+        remaining_ids, "mean_recency"
+    ].idxmax()
+
+    remaining_ids = remaining_ids[
+        remaining_ids != at_risk_id
+    ]
+
+    # Identify Loyal by highest mean frequency.
+    loyal_id = profile.loc[
+        remaining_ids, "mean_frequency"
+    ].idxmax()
+
+    regular_ids = remaining_ids[
+        remaining_ids != loyal_id
+    ]
+
     segment_names = {
-        0: "Regular Customers",
-        1: "Premium Customers",
-        2: "Loyal Customers",
-        3: "At-Risk Customers"
+        premium_id: "Premium Customers",
+        at_risk_id: "At-Risk Customers",
+        loyal_id: "Loyal Customers"
     }
 
-    rfm["segment_name"] = rfm["segment_id"].map(segment_names)
-    rfm["is_premium"] = (rfm["segment_id"] == 1).astype(int)
+    for segment_id in regular_ids:
+        segment_names[segment_id] = "Regular Customers"
 
-    # PCA on standardized RFM features
+    rfm["segment_name"] = rfm["segment_id"].map(segment_names)
+
+    rfm["is_premium"] = (
+        rfm["segment_id"] == premium_id
+    ).astype(int)
+
+    # PCA on standardized RFM features.
     pca = PCA(n_components=2)
     pca.fit_transform(scaled_rfm)
 
@@ -101,7 +135,7 @@ def build_rfm():
     print("Component 2:", round(pca.explained_variance_ratio_[1], 3))
     print("Total:", round(pca.explained_variance_ratio_.sum(), 3))
 
-    # Save the final customer segments
+    # Save the final customer segments.
     final_columns = [
         "customer_id",
         "recency",
@@ -113,6 +147,7 @@ def build_rfm():
     ]
 
     final_segments = rfm[final_columns]
+
     final_segments.to_csv(
         OUTPUTS / "customer_segments.csv",
         index=False
