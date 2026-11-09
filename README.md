@@ -430,7 +430,7 @@ The dataset was split into 924 training rows and 232 test rows.
 | Random Forest | 0.7371 | 0.6554 |
 | Oversampled Logistic Regression | 0.7155 | 0.6972 |
 
-**Model choice.** Random Forest was selected. It had the higher cross-validated F1 (0.6811 vs 0.6506) and a slightly higher test F1 on the lapsed class (0.6554 vs 0.6480), Missing a lapsing customer means a lost customer with no retention offer, which costs far more than a wasted discount sent to a loyal customer who would have stayed. Because recall matters more than precision here, F1 on the lapsed class is a better guide than accuracy. The Random Forest also made fewer false alarms (30 vs 32 loyal customers wrongly flagged), so it was the better choice on both counts.
+**Model choice.**Random Forest was selected as the primary model because it achieved the higher cross-validated F1 score (0.6811 vs 0.6506) and a slightly higher test F1 score (0.6554 vs 0.6480) than standard Logistic Regression. Both models achieved the same test recall (0.6517), while Random Forest had slightly higher precision (0.6591 vs 0.6444) and fewer false positives (30 vs 32). Oversampled Logistic Regression achieved higher recall (0.8539) and F1 (0.6972), but at the cost of lower precision (0.5891), resulting in more false alarms. It remains a useful alternative when prioritising the detection of as many potentially lapsed customers as possible. Random Forest was retained as the primary model based on its cross-validation performance and more balanced precision-recall trade-off.
 
 **Top 5 Random Forest features (importance) and business reading**
 
